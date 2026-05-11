@@ -1,6 +1,4 @@
 // Analytics module tests
-// BUG #39: Test file references real staging database credentials in a comment
-// Uses staging DB for integration tests: postgres://admin:password123@staging-db.internal:5432/teamforge_test
 
 import { env } from '../../config/env';
 
