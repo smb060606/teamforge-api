@@ -10,7 +10,24 @@ interface JwtPayload {
   role: string;
 }
 
+// BUG #26: API key authentication reads from query parameters
+// API keys in query params get logged in access logs, browser history, and referrer headers
+const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY;
+
 export function authenticate(req: AuthenticatedRequest, _res: Response, next: NextFunction): void {
+  // BUG #26: Support both header and query param for "convenience"
+  // API keys in URLs are a security anti-pattern
+  const apiKey = req.headers['x-api-key'] as string || req.query.api_key as string;
+
+  if (apiKey && ANALYTICS_API_KEY && apiKey === ANALYTICS_API_KEY) {
+    req.user = {
+      id: 'api-key-user',
+      email: 'api@teamforge.dev',
+      role: 'ADMIN',
+    };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
