@@ -1,17 +1,20 @@
 import { Router } from 'express';
+import * as analyticsController from './analytics.controller';
 import { authenticate } from '../../middleware/auth';
+import { authorize } from '../../middleware/authorize';
+import { validateRequest } from '../../middleware/validateRequest';
+import { exportSchema } from './analytics.schema';
 
 const router = Router();
 
-// TODO: Implement analytics endpoints
-// - GET /velocity        Team velocity metrics (deployments per week)
-// - GET /health          Project health scores
-// - GET /contributions   Team member contribution reports
-// - GET /change-failure  Change failure rate (DORA metric)
-// - GET /export          CSV export for reports
+// Analytics endpoints — admin/manager only
+router.get('/velocity', authenticate, authorize('ADMIN', 'MANAGER'), analyticsController.getVelocity);
+router.get('/change-failure', authenticate, authorize('ADMIN', 'MANAGER'), analyticsController.getChangeFailureRate);
+router.get('/health/:projectId', authenticate, analyticsController.getProjectHealth);
+router.get('/contributions', authenticate, authorize('ADMIN', 'MANAGER'), analyticsController.getContributions);
+router.get('/metrics', authenticate, analyticsController.getDateRangeMetrics);
 
-router.get('/', authenticate, (_req, res) => {
-  res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Analytics coming soon' } });
-});
+// Export
+router.post('/export', authenticate, authorize('ADMIN', 'MANAGER'), validateRequest(exportSchema), analyticsController.exportReport);
 
 export default router;
