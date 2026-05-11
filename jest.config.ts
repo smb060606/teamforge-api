@@ -11,6 +11,16 @@ const config: Config = {
     '!src/**/*.test.ts',
     '!src/generated/**',
   ],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        types: ['jest', 'node'],
+      },
+    }],
+  },
 };
 
 export default config;
