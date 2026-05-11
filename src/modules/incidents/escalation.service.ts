@@ -2,14 +2,11 @@ import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { checkSLABreach } from './sla.service';
 
-// BUG #18: Escalation check doesn't filter out RESOLVED/CLOSED incidents
-// Resolved incidents continue to trigger escalation notifications
+// Check high-severity incidents for SLA breaches and trigger escalations
 export async function checkAndEscalate() {
   const threshold = new Date();
   threshold.setHours(threshold.getHours() - 1);
 
-  // Missing: status: { notIn: ['RESOLVED', 'CLOSED'] }
-  // This means resolved incidents past their SLA still trigger escalations
   const incidents = await prisma.incident.findMany({
     where: {
       severity: { in: ['SEV1', 'SEV2'] },

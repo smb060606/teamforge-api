@@ -19,8 +19,6 @@ router.get('/', authenticate, incidentsController.listIncidents);
 router.get('/:id', authenticate, incidentsController.getIncident);
 router.post('/', authenticate, validateRequest(createIncidentSchema), incidentsController.createIncident);
 
-// BUG #25: Missing validateRequest middleware on PUT route
-// All other mutation routes use validation, but this one was "accidentally" omitted
 router.put('/:id', authenticate, incidentsController.updateIncident);
 
 // Status and assignment

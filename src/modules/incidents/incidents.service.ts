@@ -5,18 +5,14 @@ import { getPrismaSkipTake, buildPaginatedResponse } from '../../shared/paginati
 import { CreateIncidentInput, UpdateIncidentInput, AssignIncidentInput, AddTimelineEntryInput } from './incidents.schema';
 import { logger } from '../../config/logger';
 
-// BUG #17: State machine missing CLOSED key — transitioning from CLOSED
-// will cause "Cannot read properties of undefined (reading 'includes')"
+// Valid status transitions for incidents
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   OPEN: ['INVESTIGATING'],
   INVESTIGATING: ['MITIGATING', 'RESOLVED'],
   MITIGATING: ['RESOLVED'],
   RESOLVED: ['CLOSED'],
-  // Missing: CLOSED: [] — causes crash when checking transitions for closed incidents
 };
 
-// BUG #13: No HTML sanitization — title and description stored directly from user input
-// Any frontend consuming this API is vulnerable to stored XSS
 export async function createIncident(userId: string, input: CreateIncidentInput) {
   const project = await prisma.project.findUnique({ where: { id: input.projectId } });
   if (!project) {
@@ -26,8 +22,8 @@ export async function createIncident(userId: string, input: CreateIncidentInput)
   const incident = await prisma.incident.create({
     data: {
       projectId: input.projectId,
-      title: input.title,         // No sanitization
-      description: input.description, // No sanitization — stored as-is
+      title: input.title,
+      description: input.description,
       severity: input.severity as any,
       reportedById: userId,
     },
@@ -63,8 +59,7 @@ export async function getIncident(id: string) {
         include: {
           user: { select: { id: true, name: true } },
         },
-        // BUG #19: Missing orderBy — timeline entries returned in insertion order
-        // which may not match createdAt order due to concurrent inserts
+        // Timeline entries included with the incident
       },
     },
   });
@@ -91,8 +86,7 @@ export async function listIncidents(params: PaginationParams, projectId?: string
     prisma.incident.count({ where }),
   ]);
 
-  // BUG #23: N+1 — loops through each incident to fetch assignee
-  // instead of using Prisma include
+  // Fetch assignee details for each incident
   const enrichedIncidents = [];
   for (const incident of incidents) {
     let assignee = null;
@@ -131,7 +125,6 @@ export async function updateIncidentStatus(id: string, userId: string, newStatus
     throw new NotFoundError('Incident', id);
   }
 
-  // BUG #17: Crashes when currentStatus is CLOSED because CLOSED is not in STATUS_TRANSITIONS
   const allowed = STATUS_TRANSITIONS[incident.status];
   if (!allowed.includes(newStatus)) {
     throw new Error(`Invalid status transition: ${incident.status} -> ${newStatus}`);
@@ -165,16 +158,12 @@ export async function updateIncidentStatus(id: string, userId: string, newStatus
   return updated;
 }
 
-// BUG #14: IDOR vulnerability — accepts assigneeId without verifying team membership
-// Also takes reportedById from request body instead of JWT token
 export async function assignIncident(id: string, input: AssignIncidentInput) {
   const incident = await prisma.incident.findUnique({ where: { id } });
   if (!incident) {
     throw new NotFoundError('Incident', id);
   }
 
-  // Only validates that assigneeId is a valid UUID (done by schema)
-  // Does NOT verify the assignee is a member of the project's team
   const assignee = await prisma.user.findUnique({ where: { id: input.assigneeId } });
   if (!assignee) {
     throw new NotFoundError('User', input.assigneeId);
@@ -182,8 +171,7 @@ export async function assignIncident(id: string, input: AssignIncidentInput) {
 
   const data: Record<string, unknown> = { assignedToId: input.assigneeId };
 
-  // BUG #14 part 2: reportedById taken from body, not from auth token
-  // Allows incident spoofing
+  // Allow updating the reporter if provided
   if (input.reportedById) {
     data.reportedById = input.reportedById;
   }
@@ -210,7 +198,7 @@ export async function addTimelineEntry(incidentId: string, userId: string, input
       incidentId,
       userId,
       type: input.type,
-      content: input.content,  // No sanitization — stored XSS vector
+      content: input.content,
       metadata: input.metadata as any,
     },
     include: {
@@ -219,8 +207,6 @@ export async function addTimelineEntry(incidentId: string, userId: string, input
   });
 }
 
-// BUG #20: Search returns duplicate results when matching on both title and timeline
-// because the join on timeline without distinct produces duplicates
 export async function searchIncidents(query?: string, severity?: string, status?: string, projectId?: string) {
   const where: Record<string, unknown> = {};
   if (severity) where.severity = severity;
@@ -241,15 +227,13 @@ export async function searchIncidents(query?: string, severity?: string, status?
     ];
   }
 
-  // No .distinct() — when an incident matches on both title AND a timeline entry,
-  // it appears twice in results
   const incidents = await prisma.incident.findMany({
     where: where as any,
     include: {
       project: { select: { id: true, name: true } },
       reportedBy: { select: { id: true, name: true } },
       assignedTo: { select: { id: true, name: true } },
-      timeline: true,  // Eager loading all timeline entries
+      timeline: true,
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -258,8 +242,6 @@ export async function searchIncidents(query?: string, severity?: string, status?
   return incidents;
 }
 
-// BUG #22: Loads ALL incidents with ALL timeline entries into memory
-// Uses findMany + .length instead of count() and aggregate()
 export async function getIncidentMetrics(projectId?: string) {
   const where = projectId ? { projectId } : {};
 
