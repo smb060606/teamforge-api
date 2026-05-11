@@ -1,18 +1,20 @@
 import { Router } from 'express';
+import * as deploymentsController from './deployments.controller';
 import { authenticate } from '../../middleware/auth';
+import { validateRequest } from '../../middleware/validateRequest';
+import { createDeploymentSchema, updateStatusSchema } from './deployments.schema';
 
 const router = Router();
 
-// TODO: Implement deployment management endpoints
-// - POST /         Create a new deployment
-// - GET /          List deployments (with filtering by project, environment, status)
-// - GET /:id       Get deployment details
-// - PUT /:id/status  Update deployment status (webhook callback)
-// - POST /:id/rollback  Rollback a deployment
-// - GET /stats     Get deployment statistics
+// Deployment CRUD
+router.get('/', authenticate, deploymentsController.listDeployments);
+router.get('/history', authenticate, deploymentsController.getHistory);
+router.get('/stats/:projectId', authenticate, deploymentsController.getStats);
+router.get('/:id', authenticate, deploymentsController.getDeployment);
+router.post('/', authenticate, validateRequest(createDeploymentSchema), deploymentsController.createDeployment);
+router.put('/:id/status', authenticate, validateRequest(updateStatusSchema), deploymentsController.updateStatus);
 
-router.get('/', authenticate, (_req, res) => {
-  res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Deployment management coming soon' } });
-});
+// Rollback
+router.post('/:id/rollback', authenticate, deploymentsController.rollbackDeployment);
 
 export default router;
