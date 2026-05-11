@@ -108,7 +108,6 @@ export async function updateDeploymentStatus(id: string, input: UpdateStatusInpu
     throw new Error(`Invalid status transition: ${deployment.status} -> ${input.status}`);
   }
 
-  // No transaction wrapping these operations
   const updated = await prisma.deployment.update({
     where: { id },
     data: {
@@ -243,7 +242,6 @@ export async function getDeploymentHistory(
   `;
 
   if (environment) {
-    // Direct string interpolation — SQL injection vulnerability
     query += ` AND d.environment = '${environment}'`;
   }
 
