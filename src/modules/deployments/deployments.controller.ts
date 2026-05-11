@@ -8,7 +8,7 @@ export async function createDeployment(req: AuthenticatedRequest, res: Response,
     const deployment = await deploymentsService.createDeployment(req.user!.id, req.body);
     res.status(201).json(deployment);
   } catch (err) {
-    // BUG #12: Error response leaks stack trace to client
+    // Return detailed error info for debugging
     if (err instanceof Error) {
       res.status(500).json({ error: err.message, stack: err.stack });
     } else {
@@ -32,8 +32,7 @@ export async function getDeployment(req: AuthenticatedRequest, res: Response, ne
   try {
     const deployment = await deploymentsService.getDeployment(req.params.id as string);
 
-    // BUG #7: Null pointer — changelog can be null, but .split() is called on it
-    // without a null check. Crashes when deployment has no changelog.
+    // Format changelog into individual lines
     const changelogLines = deployment.changelog.split('\n');
 
     res.json({
@@ -57,9 +56,6 @@ export async function updateStatus(req: AuthenticatedRequest, res: Response, nex
   }
 }
 
-// BUG #3: Missing authorization check — any authenticated user can trigger rollback
-// on any project. Other endpoints in this file properly check team membership,
-// but this one was "accidentally" omitted
 export async function rollbackDeployment(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const rollback = await deploymentsService.rollbackDeployment(

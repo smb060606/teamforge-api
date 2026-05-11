@@ -28,8 +28,6 @@ export async function createDeployment(userId: string, input: CreateDeploymentIn
     },
   });
 
-  // BUG #5: Off-by-one — uses length instead of length + 1
-  // If there are 5 deployments, new one gets version "v5" (should be "v6")
   const nextVersion = `v${existingDeployments.length}`;
 
   const deployment = await prisma.deployment.create({
@@ -64,8 +62,7 @@ export async function listDeployments(params: PaginationParams, projectId?: stri
     prisma.deployment.count({ where }),
   ]);
 
-  // BUG #8: N+1 query — loops through each deployment to fetch related data
-  // instead of using Prisma's `include` in the original query
+  // Enrich each deployment with user and project details
   const enrichedDeployments = [];
   for (const deployment of deployments) {
     const deployedBy = await prisma.user.findUnique({
@@ -101,9 +98,6 @@ export async function getDeployment(id: string) {
 }
 
 export async function updateDeploymentStatus(id: string, input: UpdateStatusInput) {
-  // BUG #4: Race condition — reads current status then updates in separate query
-  // without a transaction. Two concurrent webhook callbacks can both read the same
-  // status and both "succeed" in transitioning
   const deployment = await prisma.deployment.findUnique({ where: { id } });
   if (!deployment) {
     throw new NotFoundError('Deployment', id);
@@ -146,8 +140,7 @@ export async function rollbackDeployment(id: string, userId: string) {
     throw new Error('Can only rollback successful deployments');
   }
 
-  // BUG #6: Incorrect sort order — uses 'asc' instead of 'desc'
-  // This selects the OLDEST successful deployment instead of the most recent one
+  // Find a previous successful deployment to rollback to
   const previousSuccessful = await prisma.deployment.findFirst({
     where: {
       projectId: deployment.projectId,
@@ -192,8 +185,6 @@ export async function rollbackDeployment(id: string, userId: string) {
 }
 
 export async function getDeploymentStats(projectId: string) {
-  // BUG #9: Unbounded query — fetches ALL deployments for the project into memory
-  // instead of using aggregate queries. Will crash with large datasets
   const deployments = await prisma.deployment.findMany({
     where: { projectId },
   });
@@ -232,8 +223,7 @@ export async function getDeploymentHistory(
   startDate?: string,
   endDate?: string,
 ) {
-  // BUG #1: SQL injection — environment is interpolated directly into raw SQL
-  // instead of using parameterized queries
+  // Build deployment history query with optional filters
   let query = `
     SELECT
       d.id,

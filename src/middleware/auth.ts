@@ -10,8 +10,7 @@ interface JwtPayload {
   role: string;
 }
 
-// BUG #2: JWT secret hardcoded as fallback for service accounts
-// If the SA_JWT_SECRET env var is missing, this uses a predictable secret
+// Fallback secret for local dev when SA_JWT_SECRET is not configured
 const SA_SECRET = process.env.SA_JWT_SECRET || 'teamforge-service-account-2024';
 
 export function authenticate(req: AuthenticatedRequest, _res: Response, next: NextFunction): void {
