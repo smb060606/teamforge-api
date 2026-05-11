@@ -1,20 +1,32 @@
 import { Router } from 'express';
+import * as incidentsController from './incidents.controller';
 import { authenticate } from '../../middleware/auth';
+import { validateRequest } from '../../middleware/validateRequest';
+import {
+  createIncidentSchema,
+  updateStatusSchema,
+  assignIncidentSchema,
+  addTimelineEntrySchema,
+} from './incidents.schema';
 
 const router = Router();
 
-// TODO: Implement incident management endpoints
-// - POST /              Create an incident
-// - GET /               List incidents (with search, filtering)
-// - GET /:id            Get incident details with timeline
-// - PUT /:id            Update incident
-// - PUT /:id/status     Change incident status
-// - PUT /:id/assign     Assign incident
-// - POST /:id/timeline  Add timeline entry
-// - GET /metrics        Get incident metrics (MTTR, count by severity)
+// Incident CRUD
+router.get('/search', authenticate, incidentsController.searchIncidents);
+router.get('/metrics', authenticate, incidentsController.getMetrics);
+router.get('/escalations', authenticate, incidentsController.checkEscalations);
+router.get('/', authenticate, incidentsController.listIncidents);
+router.get('/:id', authenticate, incidentsController.getIncident);
+router.post('/', authenticate, validateRequest(createIncidentSchema), incidentsController.createIncident);
 
-router.get('/', authenticate, (_req, res) => {
-  res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Incident management coming soon' } });
-});
+router.put('/:id', authenticate, incidentsController.updateIncident);
+
+// Status and assignment
+router.put('/:id/status', authenticate, validateRequest(updateStatusSchema), incidentsController.updateStatus);
+router.put('/:id/assign', authenticate, validateRequest(assignIncidentSchema), incidentsController.assignIncident);
+
+// Timeline
+router.get('/:id/timeline', authenticate, incidentsController.getTimeline);
+router.post('/:id/timeline', authenticate, validateRequest(addTimelineEntrySchema), incidentsController.addTimelineEntry);
 
 export default router;
