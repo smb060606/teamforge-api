@@ -1,15 +1,12 @@
 import { prisma } from '../../config/database';
 import { NotFoundError } from '../../shared/errors';
 
-// BUG #19: Timeline query missing orderBy clause
-// Returns entries in insertion order, not chronological order
 export async function getTimeline(incidentId: string) {
   const incident = await prisma.incident.findUnique({ where: { id: incidentId } });
   if (!incident) {
     throw new NotFoundError('Incident', incidentId);
   }
 
-  // Missing: orderBy: { createdAt: 'asc' }
   const entries = await prisma.incidentTimeline.findMany({
     where: { incidentId },
     include: {
