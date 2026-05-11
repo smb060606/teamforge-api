@@ -1,6 +1,4 @@
 -- Add indexes for deployment queries
--- BUG #10: The comments describe a composite index on (project_id, environment, status)
--- but the actual SQL only creates a single-column index on project_id
 
 -- Create composite index for filtering deployments by project, environment, and status
 -- This supports the common query pattern: WHERE project_id = ? AND environment = ? AND status = ?

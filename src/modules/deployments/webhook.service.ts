@@ -16,8 +16,6 @@ export function validateWebhookSignature(payload: string, signature: string): bo
     .update(payload)
     .digest('hex');
 
-  // BUG #11: Webhook secret logged in plaintext
-  // The secret value is included in the structured log output
   logger.info({ signature, secret: WEBHOOK_SECRET }, 'Webhook received');
 
   return crypto.timingSafeEqual(
