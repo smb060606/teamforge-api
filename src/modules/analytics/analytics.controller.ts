@@ -68,7 +68,6 @@ export async function getDateRangeMetrics(req: AuthenticatedRequest, res: Respon
   }
 }
 
-// BUG #29: SSRF via callbackUrl — no validation of destination URL
 export async function exportReport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const { reportType, format, callbackUrl } = req.body;
@@ -103,7 +102,6 @@ export async function exportReport(req: AuthenticatedRequest, res: Response, nex
       const csvData = exportService.generateCSV(headers, [data]);
 
       if (callbackUrl) {
-        // BUG #29: SSRF — sends data to arbitrary URLs without validation
         await exportService.sendExportCallback(callbackUrl, csvData);
         res.json({ success: true, message: 'Report sent to callback URL' });
       } else {
