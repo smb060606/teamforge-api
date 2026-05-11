@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  DEVELOPER
+  VIEWER
+}
+
+enum TeamMemberRole {
+  LEAD
+  MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  MAINTENANCE
+}
+
+enum DeploymentStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+  ROLLED_BACK
+}
+
+enum DeploymentEnvironment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+enum IncidentSeverity {
+  SEV1
+  SEV2
+  SEV3
+  SEV4
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  MITIGATING
+  RESOLVED
+  CLOSED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(DEVELOPER)
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  ownedTeams       Team[]
+  teamMemberships  TeamMember[]
+  deployments      Deployment[]    @relation("DeployedBy")
+  reportedIncidents Incident[]     @relation("ReportedBy")
+  assignedIncidents Incident[]     @relation("AssignedTo")
+  auditLogs        AuditLog[]
+  incidentTimeline IncidentTimeline[]
+
+  @@map("users")
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  ownerId     String   @map("owner_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner    User         @relation(fields: [ownerId], references: [id])
+  members  TeamMember[]
+  projects Project[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String         @id @default(uuid())
+  userId   String         @map("user_id")
+  teamId   String         @map("team_id")
+  role     TeamMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now()) @map("joined_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  name          String
+  slug          String        @unique
+  description   String?
+  teamId        String        @map("team_id")
+  status        ProjectStatus @default(ACTIVE)
+  repositoryUrl String?       @map("repository_url")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  deployments Deployment[]
+  incidents   Incident[]
+
+  @@map("projects")
+}
+
+model Deployment {
+  id           String                @id @default(uuid())
+  projectId    String                @map("project_id")
+  version      String
+  environment  DeploymentEnvironment
+  status       DeploymentStatus      @default(PENDING)
+  deployedById String                @map("deployed_by_id")
+  commitSha    String?               @map("commit_sha")
+  changelog    String?               @db.Text
+  startedAt    DateTime              @default(now()) @map("started_at")
+  completedAt  DateTime?             @map("completed_at")
+  rollbackOfId String?               @map("rollback_of_id")
+  createdAt    DateTime              @default(now()) @map("created_at")
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deployedBy User        @relation("DeployedBy", fields: [deployedById], references: [id])
+  rollbackOf Deployment? @relation("RollbackChain", fields: [rollbackOfId], references: [id])
+  rollbacks  Deployment[] @relation("RollbackChain")
+
+  @@index([projectId])
+  @@index([projectId, environment])
+  @@map("deployments")
+}
+
+model Incident {
+  id           String           @id @default(uuid())
+  projectId    String           @map("project_id")
+  title        String
+  description  String           @db.Text
+  severity     IncidentSeverity
+  status       IncidentStatus   @default(OPEN)
+  reportedById String           @map("reported_by_id")
+  assignedToId String?          @map("assigned_to_id")
+  resolvedAt   DateTime?        @map("resolved_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportedBy User               @relation("ReportedBy", fields: [reportedById], references: [id])
+  assignedTo User?              @relation("AssignedTo", fields: [assignedToId], references: [id])
+  timeline   IncidentTimeline[]
+
+  @@index([projectId])
+  @@index([severity, status])
+  @@map("incidents")
+}
+
+model IncidentTimeline {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  userId     String   @map("user_id")
+  type       String   // "comment", "status_change", "assignment", "severity_change"
+  content    String   @db.Text
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([incidentId, createdAt])
+  @@map("incident_timeline")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
